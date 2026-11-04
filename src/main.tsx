@@ -12,7 +12,7 @@ function App() {
   const [password,setPassword] = useState(''), [busy,setBusy] = useState(false), [error,setError] = useState('');
   const [restore,setRestore] = useState<Envelope|null>(null);
   const upload = useRef<HTMLInputElement>(null);
-  const [hasLocal] = useState(()=>{try{return !!localStorage.getItem(STORAGE_KEY);}catch{return false;}});
+  const [hasLocal,setHasLocal] = useState(()=>{try{return !!localStorage.getItem(STORAGE_KEY);}catch{return false;}});
   const lock = () => { setSession(null); setPassword(''); };
   async function unlock(e:React.FormEvent) {
     e.preventDefault(); setBusy(true); setError('');
@@ -30,7 +30,7 @@ function App() {
       const opened = await openEnvelope(envelope,password);
       if(restore && raw && !confirm('用选中的备份替换本机记录？请先确认已有最新备份。')) return;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(envelope));
-      setSession({...opened, raw:JSON.stringify(envelope)}); setPassword(''); setRestore(null);
+      setHasLocal(true); setSession({...opened, raw:JSON.stringify(envelope)}); setPassword(''); setRestore(null);
     } catch(err) { setError(err instanceof Error ? err.message : '解锁失败。请检查浏览器存储是否可用。'); }
     finally { setBusy(false); }
   }
