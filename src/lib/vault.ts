@@ -45,3 +45,14 @@ export async function openEnvelope(input: unknown, password: string) {
   return {snapshot:value, key, envelope};
 }
 export function salt() { return encode(crypto.getRandomValues(new Uint8Array(16))); }
+
+// This only prepares a replacement. Persist it after checking for concurrent writes.
+export async function rekeyEnvelope(input: unknown, currentPassword: string, newPassword: string) {
+  if(newPassword.length < 12) throw Error('新口令至少需要 12 个字符。');
+  if(newPassword === currentPassword) throw Error('新口令不能与当前口令相同。');
+  const opened = await openEnvelope(input, currentPassword);
+  const template = {salt: salt(), iterations: ITERATIONS};
+  const key = await deriveKey(newPassword, template.salt, template.iterations);
+  const envelope = await seal(opened.snapshot, key, template);
+  return {snapshot: opened.snapshot, key, envelope};
+}
