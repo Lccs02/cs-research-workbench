@@ -17,7 +17,7 @@ export default function ChangePassphraseDialog({onChange,onClose}:{
   async function submit(event:React.FormEvent<HTMLFormElement>) {
     event.preventDefault();setError('');
     if(next!==repeat){setError('两次输入的新口令不一致。');return;}
-    if(next.length<12){setError('新口令至少需要 12 个字符。');return;}
+    if(next.length<10){setError('新口令至少需要 10 个字符。');return;}
     setBusy(true);
     try {
       const encrypted=await onChange(current,next);
@@ -43,8 +43,8 @@ export default function ChangePassphraseDialog({onChange,onClose}:{
           <button className="button primary" onClick={downloadBackup}><Download size={15}/>下载新备份</button></div></>:
       <form onSubmit={submit}><div className="form-grid"><p className="full passphrase-intro">验证当前口令后，在本机重新加密现有记录。口令不会上传。</p>
         <label className="full" htmlFor="current-passphrase">当前口令<input id="current-passphrase" name="currentPassphrase" type="password" autoComplete="current-password" autoFocus required value={current} onChange={e=>setCurrent(e.target.value)} disabled={busy}/></label>
-        <label className="full" htmlFor="new-passphrase">新口令<input id="new-passphrase" name="newPassphrase" type="password" autoComplete="new-password" minLength={12} required value={next} onChange={e=>setNext(e.target.value)} disabled={busy}/><small>至少 12 个字符，建议使用较长且独有的口令。</small></label>
-        <label className="full" htmlFor="repeat-passphrase">再次输入新口令<input id="repeat-passphrase" name="repeatPassphrase" type="password" autoComplete="new-password" minLength={12} required value={repeat} onChange={e=>setRepeat(e.target.value)} disabled={busy}/></label>
+        <label className="full" htmlFor="new-passphrase">新口令<input id="new-passphrase" name="newPassphrase" type="password" autoComplete="new-password" minLength={10} required value={next} onChange={e=>setNext(e.target.value)} disabled={busy}/><small>至少 10 个字符，建议使用较长且独有的口令。</small></label>
+        <label className="full" htmlFor="repeat-passphrase">再次输入新口令<input id="repeat-passphrase" name="repeatPassphrase" type="password" autoComplete="new-password" minLength={10} required value={repeat} onChange={e=>setRepeat(e.target.value)} disabled={busy}/></label>
         <p className="form-note full">修改仅影响当前浏览器中的记录。其他设备和旧备份保留原口令；换设备时请导入修改后导出的新备份。</p>
       </div>{error&&<div className="form-error" role="alert">{error}</div>}
         <div className="modal-footer"><button type="button" className="button" disabled={busy} onClick={onClose}>取消</button><span/>
