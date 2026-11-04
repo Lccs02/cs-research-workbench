@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.openai/
+.checks/
+*.local.*
+.env*
+*.key
+*.secret
+*.plaintext.json
+
+node_modules
+
+public/*vault*.json

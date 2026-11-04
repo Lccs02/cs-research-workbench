@@ -1,0 +1,37 @@
+import ts from 'typescript';
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const dir=new URL('../.checks/',import.meta.url);await mkdir(dir,{recursive:true});
+for(const f of ['model','vault','calendar','template']) {
+  const source=(await readFile(new URL('../src/lib/'+f+'.ts',import.meta.url),'utf8')).replaceAll("from './model'","from './model.mjs'");
+  await writeFile(new URL(f+'.mjs',dir),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
+}
+const {validateData,isPaperReady,generateSummary,autoSummaries,today}=await import(new URL('model.mjs',dir));
+const {openEnvelope,seal,deriveKey,salt,ITERATIONS}=await import(new URL('vault.mjs',dir));
+const {calendar}=await import(new URL('calendar.mjs',dir));
+const project={id:'test',name:'测试项目',subtitle:'',venue:'',status:'研究筹备',color:'blue',updated:today(),source:'测试',next:''};
+const item=(id,patch={})=>({id,project:'test',kind:'evidence',title:'待核验想法',detail:'尚未验证的测试内容',stage:'待办',proof:'研究设想',scope:'内部记录',source:'测试记录',confirmedBy:'',verifiedAt:'',due:'',dateKind:'个人计划',priority:'中',context:'其他',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),...patch});
+const fixture={projects:[project],items:[item('idea'),item('pending',{proof:'待人工确认',title:'PENDING_MARKER'}),item('ready',{title:'READY_MARKER',detail:'已核验的测试内容',proof:'已验证结果',scope:'论文可用',source:'test.csv',confirmedBy:'测试人',verifiedAt:today()}),item('due',{kind:'milestone',title:'已确认测试节点',due:today(),dateKind:'已确认',context:'投稿'}),item('unconfirmed',{kind:'milestone',due:today(),dateKind:'待核对',context:'汇报'})],summaries:[],audit:[]};
+validateData(fixture);
+const bad=structuredClone(fixture);bad.items[0].scope='论文可用';assert.throws(()=>validateData(bad));
+const missing=structuredClone(fixture);missing.items[2].confirmedBy='';assert.throws(()=>validateData(missing));
+const date=structuredClone(fixture);date.items[2].verifiedAt='2026-02-31';assert.throws(()=>validateData(date));
+assert.equal(fixture.items.filter(isPaperReady).length,1);
+const external=generateSummary(fixture,'all','投稿',true);assert(external.includes('READY_MARKER'));assert(!external.includes('PENDING_MARKER'));assert(!external.includes('尚未验证的测试内容'));
+assert.equal(autoSummaries(fixture).count,1);assert.equal(autoSummaries(fixture).count,0);assert.equal(fixture.summaries.length,1);
+const ics=calendar(fixture);assert(ics.includes('UID:due@'));assert(!ics.includes('UID:unconfirmed@'));assert(ics.includes('BEGIN:VALARM'));
+for(const line of ics.split('\r\n'))assert(new TextEncoder().encode(line).length<=75);
+const template={salt:salt(),iterations:ITERATIONS};
+const key=await deriveKey('test-only-phrase-123',template.salt);
+const snapshot={schemaVersion:1,data:fixture,revision:3,updatedAt:new Date().toISOString()};
+const envelope=await seal(snapshot,key,template);
+assert(!JSON.stringify(envelope).includes('READY_MARKER'));
+const opened=await openEnvelope(envelope,'test-only-phrase-123');assert.deepEqual(opened.snapshot,snapshot);
+await assert.rejects(openEnvelope(envelope,'wrong-phrase'));
+const tampered={...envelope,ciphertext:(envelope.ciphertext[0]==='A'?'B':'A')+envelope.ciphertext.slice(1)};
+await assert.rejects(openEnvelope(tampered,'test-only-phrase-123'));
+const second=await seal({...snapshot,revision:4},key,template);assert.notEqual(second.iv,envelope.iv);
+const {emptyWorkspace}=await import(new URL('template.mjs',dir));const blank=emptyWorkspace();validateData(blank);assert.equal(blank.projects.length,4);assert.equal(blank.items.length,0);
+const main=await readFile(new URL('../src/Workbench.tsx',import.meta.url),'utf8');
+assert(!main.includes("fetch('/api/"));
+console.log('Passed: evidence gates, strict dates, external summaries, deduplication, calendar, encrypted round-trip, wrong password, tamper detection, fresh IV, static migration.');
