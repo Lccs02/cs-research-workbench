@@ -11,3 +11,8 @@ dist/
 node_modules
 
 public/*vault*.json
+
+.sites-runtime/
+.wrangler/
+*research-update*.json
+*Research_Workbench_Update*.json

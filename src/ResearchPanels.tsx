@@ -1,0 +1,16 @@
+import {ArrowUpRight,ArrowRight,Target,FlaskConical,Upload} from 'lucide-react';
+import {Data,Item} from './lib/model';
+
+export function StrategyNotice({data,onOpen,onImport}:{data:Data,onOpen:()=>void,onImport:()=>void}){
+ const rows=data.items.filter(i=>i.kind==='strategy');
+ return <div className="strategy-notice"><div className="notice-icon"><Target size={22}/></div><div><span className="eyebrow">SUBMISSION PLANNING</span><h2>{rows.length?'把投稿路线与证据放在一起':'新版工作台已就绪'}</h2><p>{rows.length?`${rows.length} 条路线记录 · 候选、约束与计划分别记录。`:'导入私有更新包，合并项目状态、实验结果与近期计划。现有记录继续加密保存在本机。'}</p></div><button className="button" onClick={rows.length?onOpen:onImport}>{rows.length?'查看投稿策略':'导入私有更新'}{rows.length?<ArrowUpRight size={15}/>:<Upload size={15}/>}</button></div>;
+}
+export function StrategyBoard({data,project,onEdit,onReviews}:{data:Data,project:string,onEdit:(i:Item)=>void,onReviews:()=>void}){
+ const rows=data.items.filter(i=>i.kind==='strategy'&&(project==='all'||i.project===project));
+ return <><div className="strategy-intro"><div><span className="eyebrow">DECISIONS WITH CONTEXT</span><h2>明确约束，记录下一投。</h2><p>候选路线不代表最终决定；点击卡片可更新依据、计划与工作状态。</p></div><span className="private-pill">本机加密记录</span></div><div className="strategy-cards">{rows.map(i=>{const p=data.projects.find(p=>p.id===i.project)!;return <button key={i.id} className={'route-card '+p.color} onClick={()=>onEdit(i)}><div className="route-top"><span><i className={'dot '+p.color}/>{p.name}</span><span className="scope">{i.proof==='研究设想'?'候选 · 尚未决定':i.proof}</span></div><h3>{i.title}</h3><p>{i.detail}</p><span className="route-edit">编辑路线与依据<ArrowUpRight size={16}/></span></button>})}</div>{!rows.length&&<div className="empty">当前项目暂无路线记录；可导入私有更新包或新增记录。</div>}<div className="strategy-table panel"><div className="section-head"><h2>当前状态与决策条件</h2><button className="text-button" onClick={onReviews}>查看审稿追踪<ArrowRight size={14}/></button></div><div className="table-scroll"><table><thead><tr><th>项目</th><th>投稿路线</th><th>下一步</th><th>记录日期</th></tr></thead><tbody>{data.projects.filter(p=>project==='all'||p.id===project).map(p=><tr key={p.id}><td><b>{p.name}</b><small>{p.status}</small></td><td>{p.venue||'待确定'}</td><td>{p.next}</td><td>{p.updated}</td></tr>)}</tbody></table></div></div></>;
+}
+export function ExperimentResults({items,onEdit}:{items:Item[],onEdit:(i:Item)=>void}){
+ const rows=items.filter(i=>i.kind==='experiment'&&i.metrics);
+ if(!rows.length)return null;
+ return <section className="results-panel panel"><div className="section-head"><div><h2><FlaskConical size={20}/>结构化实验结果</h2><p>测试集 · 原始单位 · 版本与种子分别记录</p></div></div><div className="table-scroll"><table><thead><tr><th>数据集 / 版本</th><th>C-MAE ↓</th><th>C-RMSE ↓</th><th>F-MAE ↓</th><th>F-RMSE ↓</th><th>证据状态</th></tr></thead><tbody>{rows.map(i=>{const m=i.metrics!;return <tr key={i.id}><td><b>{m.dataset}</b><small>{m.version} · seeds {m.seeds.join('/')}</small></td>{[m.cmae,m.crmse,m.fmae,m.frmse].map((n,j)=><td key={j} className="metric-number">{n.toFixed(3)}</td>)}<td><button className="text-button" onClick={()=>onEdit(i)}>{i.proof}<ArrowUpRight size={13}/></button></td></tr>})}</tbody></table></div><p className="result-note">点击证据状态查看来源与核验范围；不同版本和配置的指标分别保留。</p></section>;
+}

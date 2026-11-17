@@ -26,7 +26,7 @@ export function mergeUpdate(current: Data, input: unknown) {
       new Set(update.summaries.map(s => s.id)).size !== update.summaries.length) throw Error('更新包中的记录编号重复。');
   const marker = `增量导入：${update.id}`;
   if (next.audit.some(a => a.action === marker)) return { data: next, title: update.title, alreadyApplied: true, added: 0, changed: 0, skipped: 0 };
-  if (update.projectChanges.updated && project.updated > update.projectChanges.updated) throw Error('现有项目状态比更新包更新，请人工核对后录入。');
+  if (update.projectChanges.updated && project.updated > update.projectChanges.updated && project.status!=='待记录') throw Error('现有项目状态比更新包更新，请人工核对后录入。');
   for (const item of update.items) {
     const existing = next.items.find(i => i.id === item.id);
     if (existing && existing.project !== update.projectId) throw Error('记录编号与其他项目冲突。');
@@ -51,4 +51,13 @@ export function mergeUpdate(current: Data, input: unknown) {
   next.summaries.unshift(...summaries);
   next.audit = [{ at: new Date().toISOString(), action: marker }, ...next.audit].slice(0, 100);
   return { data: validateData(next), title: update.title, alreadyApplied: false, added: additions.length, changed, skipped };
+}
+
+const batchSchema=z.object({format:z.literal('research-update-batch-v1'),title:z.string().min(1).max(200),updates:z.array(updateSchema).min(1).max(30)}).strict();
+export function mergeUpdates(current:Data,input:unknown){
+ const batch=batchSchema.parse(input);
+ if(new Set(batch.updates.map(u=>u.projectId)).size!==batch.updates.length)throw Error('批量更新中项目重复。');
+ let data=current,added=0,changed=0,skipped=0,alreadyApplied=true;
+ for(const update of batch.updates){const r=mergeUpdate(data,update);data=r.data;added+=r.added;changed+=r.changed;skipped+=r.skipped;alreadyApplied=alreadyApplied&&r.alreadyApplied;}
+ return {data,title:batch.title,added,changed,skipped,alreadyApplied};
 }
