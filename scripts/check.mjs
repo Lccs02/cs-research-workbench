@@ -2,7 +2,7 @@ import ts from 'typescript';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const dir=new URL('../.checks/',import.meta.url);await mkdir(dir,{recursive:true});
-for(const f of ['model','vault','calendar','template']) {
+for(const f of ['model','vault','calendar','template','updates']) {
   const source=(await readFile(new URL('../src/lib/'+f+'.ts',import.meta.url),'utf8')).replaceAll("from './model'","from './model.mjs'");
   await writeFile(new URL(f+'.mjs',dir),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
 }
@@ -49,3 +49,24 @@ const {emptyWorkspace}=await import(new URL('template.mjs',dir));const blank=emp
 const main=await readFile(new URL('../src/Workbench.tsx',import.meta.url),'utf8');
 assert(!main.includes("fetch('/api/"));
 console.log('Passed: evidence gates, strict dates, external summaries, deduplication, calendar, encrypted round-trip, wrong password, tamper detection, fresh IV, passphrase rotation preserving all records, old-backup compatibility, post-rotation saving, static migration.');
+
+const {mergeUpdate}=await import(new URL('updates.mjs',dir));
+const update={format:'research-update-v1',id:'fixture-update',title:'Test update',projectId:'test',projectChanges:{status:'测试新状态',updated:today()},items:[item('new-review',{kind:'review'})],itemChanges:[],summaries:[]};
+const untouched=JSON.stringify(fixture);
+const merged=mergeUpdate(fixture,update);
+assert.equal(JSON.stringify(fixture),untouched);
+assert.equal(merged.data.projects[0].status,'测试新状态');
+assert.equal(merged.added,1);
+assert.deepEqual(merged.data.items.slice(1),fixture.items);
+assert.equal(mergeUpdate(merged.data,update).alreadyApplied,true);
+const reedited=structuredClone(merged.data);reedited.items[0].detail='manual revision';
+assert.equal(mergeUpdate(reedited,update).data.items[0].detail,'manual revision');
+assert.throws(()=>mergeUpdate(fixture,{...update,items:[item('bad',{project:'other'})]}));
+assert.throws(()=>mergeUpdate(fixture,{...update,items:[item('bad',{scope:'论文可用'})]}));
+assert.throws(()=>mergeUpdate(fixture,{...update,projectChanges:{updated:'2000-01-01'}}));
+const unrelated={...structuredClone(fixture),projects:[project,{...project,id:'other'}],items:[...fixture.items,item('other-item',{project:'other'})]};
+assert.throws(()=>mergeUpdate(unrelated,{...update,itemChanges:[{id:'other-item',changes:{stage:'已完成'}}]}));
+const withOther=mergeUpdate(unrelated,update).data;
+assert.deepEqual(withOther.projects[1],unrelated.projects[1]);
+assert.deepEqual(withOther.items.find(i=>i.id==='other-item'),unrelated.items.find(i=>i.id==='other-item'));
+console.log('Passed: update merging, input preservation, idempotence, cross-project isolation, evidence gates, stale update rejection.');
