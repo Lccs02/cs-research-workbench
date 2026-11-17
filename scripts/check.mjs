@@ -2,8 +2,8 @@ import ts from 'typescript';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const dir=new URL('../.checks/',import.meta.url);await mkdir(dir,{recursive:true});
-for(const f of ['model','vault','calendar','template','updates']) {
-  const source=(await readFile(new URL('../src/lib/'+f+'.ts',import.meta.url),'utf8')).replaceAll("from './model'","from './model.mjs'");
+for(const f of ['model','vault','calendar','template','updates','structure']) {
+  const source=(await readFile(new URL('../src/lib/'+f+'.ts',import.meta.url),'utf8')).replaceAll("from './model'","from './model.mjs'").replaceAll("from './structure'","from './structure.mjs'");
   await writeFile(new URL(f+'.mjs',dir),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);
 }
 const {validateData,isPaperReady,generateSummary,autoSummaries,today}=await import(new URL('model.mjs',dir));
@@ -89,3 +89,21 @@ assert.throws(()=>validateData({...fixture,items:[{...metricItem,metrics:{...met
 const metricEnvelope=await seal({...snapshot,data:metricData},key,template);
 assert.deepEqual((await openEnvelope(metricEnvelope,'test-only-phrase-123')).snapshot.data.items[0].metrics,metricItem.metrics);
 console.log('Passed: atomic batch import, repeat protection, cross-project rejection, metric validation and encrypted metric round-trip.');
+
+const {organizeWorkspace,projectNames}=await import(new URL('structure.mjs',dir));
+const historical={...structuredClone(fixture),projects:[{...project,id:'pacsr',name:'Old title',status:'投稿准备'}],items:[{...item('legacy-review'),project:'pacsr',kind:'review',source:'AAAI 历史意见'},{...metricItem,project:'pacsr'}]};
+const organized=organizeWorkspace(historical);assert.equal(organized.data.projects[0].name,projectNames.pacsr);assert.equal(organized.data.items.filter(i=>i.kind==='experiment').length,0);assert.equal(organized.data.archivedItems.length,1);assert.equal(organized.data.items[0].submissionId,'pacsr-aaai27');assert.equal(organizeWorkspace(organized.data).changed,false);
+const newSubmission={id:'other-round',project:'pacsr',venue:'Fixture journal',venueType:'期刊',status:'投稿准备',title:'Fixture title',manuscriptId:'',submittedAt:'',decisionAt:'',round:'',versionUrl:'',source:'fixture',note:'',createdAt:'2026-11-18',updatedAt:'2026-11-18'};
+const submissionData=validateData({...organized.data,submissions:[...organized.data.submissions,newSubmission]});
+const mixed=structuredClone(submissionData);mixed.items[0].submissionId='missing';assert.throws(()=>validateData(mixed));
+const otherProject={...project,id:'wrong-project'};
+const wrongOwner=structuredClone(submissionData);wrongOwner.projects.push(otherProject);wrongOwner.submissions[0].project='wrong-project';assert.throws(()=>validateData(wrongOwner));
+const invalidGit=structuredClone(submissionData);invalidGit.projects[0].githubUrl='javascript:alert(1)';assert.throws(()=>validateData(invalidGit));
+const gitData=structuredClone(submissionData);gitData.projects[0].githubUrl='https://github.com/fixture/repository';validateData(gitData);
+console.log('Passed: project naming, submission ownership, review attribution, empty experiments with archive preservation, safe GitHub links and idempotent organization.');
+const utcEdited=structuredClone(fixture);utcEdited.items[0].updatedAt='2026-11-18T01:45:00+08:00';
+const tzResult=mergeUpdate(utcEdited,{...update,id:'timezone-update',items:[],itemChanges:[{id:'idea',changes:{title:'older patch',updatedAt:'2026-11-17T17:30:00Z'}}]});
+assert.equal(tzResult.skipped,1);assert.notEqual(tzResult.data.items[0].title,'older patch');
+const archiveMerge=mergeUpdates(twoProjects,{...batch,archivedItems:[twoProjects.items[0]]});
+assert(!archiveMerge.data.items.some(i=>i.id===twoProjects.items[0].id));assert(archiveMerge.data.archivedItems.some(i=>i.id===twoProjects.items[0].id));
+console.log('Passed: timezone-aware edit protection and archived history exclusion.');

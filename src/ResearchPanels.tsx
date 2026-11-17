@@ -3,7 +3,7 @@ import {Data,Item} from './lib/model';
 
 export function StrategyNotice({data,onOpen,onImport}:{data:Data,onOpen:()=>void,onImport:()=>void}){
  const rows=data.items.filter(i=>i.kind==='strategy');
- return <div className="strategy-notice"><div className="notice-icon"><Target size={22}/></div><div><span className="eyebrow">SUBMISSION PLANNING</span><h2>{rows.length?'把投稿路线与证据放在一起':'新版工作台已就绪'}</h2><p>{rows.length?`${rows.length} 条路线记录 · 候选、约束与计划分别记录。`:'导入私有更新包，合并项目状态、实验结果与近期计划。现有记录继续加密保存在本机。'}</p></div><button className="button" onClick={rows.length?onOpen:onImport}>{rows.length?'查看投稿策略':'导入私有更新'}{rows.length?<ArrowUpRight size={15}/>:<Upload size={15}/>}</button></div>;
+ return <div className="strategy-notice"><div className="notice-icon"><Target size={22}/></div><div><span className="eyebrow">SUBMISSION PLANNING</span><h2>{rows.length?'把投稿路线与证据放在一起':'新版工作台已就绪'}</h2><p>{rows.length?`${rows.length} 条路线记录 · 候选、约束与计划分别记录。`:'导入私有更新包，合并项目状态、投稿历史与近期计划。现有记录继续加密保存在本机。'}</p></div><button className="button" onClick={rows.length?onOpen:onImport}>{rows.length?'查看投稿策略':'导入私有更新'}{rows.length?<ArrowUpRight size={15}/>:<Upload size={15}/>}</button></div>;
 }
 export function StrategyBoard({data,project,onEdit,onReviews}:{data:Data,project:string,onEdit:(i:Item)=>void,onReviews:()=>void}){
  const rows=data.items.filter(i=>i.kind==='strategy'&&(project==='all'||i.project===project));

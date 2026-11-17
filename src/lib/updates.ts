@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { Data, itemSchema, projectSchema, summarySchema, validateData } from './model';
+import {organizeWorkspace} from './structure';
+function newer(a:string,b:string){return Date.parse(a)>Date.parse(b);}
+import { Data, itemSchema, projectSchema, summarySchema, submissionSchema, validateData } from './model';
 
 const updateSchema = z.object({
   format: z.literal('research-update-v1'),
@@ -12,6 +14,7 @@ const updateSchema = z.object({
     id: z.string().min(1).max(100),
     changes: itemSchema.omit({ id: true, project: true, createdAt: true }).partial().strict(),
   }).strict()).max(100).default([]),
+  submissions:z.array(submissionSchema).max(100).optional(),
   summaries: z.array(summarySchema).max(20).default([]),
 }).strict();
 
@@ -35,13 +38,14 @@ export function mergeUpdate(current: Data, input: unknown) {
     const existing = next.summaries.find(s => s.id === summary.id);
     if (existing && existing.project !== update.projectId) throw Error('摘要编号与其他项目冲突。');
   }
+  for(const sub of update.submissions||[]){if(sub.project!==update.projectId)throw Error('投稿归属不一致');const old=(next.submissions||[]).find(s=>s.id===sub.id);if(old&&old.project!==sub.project)throw Error('投稿编号与其他项目冲突');if(!next.submissions)next.submissions=[];if(!old)next.submissions.push(sub);else if(!newer(old.updatedAt,sub.updatedAt))Object.assign(old,sub);}
   Object.assign(project, update.projectChanges);
   let changed = 0, skipped = 0;
   for (const patch of update.itemChanges) {
     const item = next.items.find(i => i.id === patch.id);
     if (!item) { skipped++; continue; }
     if (item.project !== update.projectId) throw Error('更新不能修改其他项目的记录。');
-    if (patch.changes.updatedAt && item.updatedAt > patch.changes.updatedAt) { skipped++; continue; }
+    if (patch.changes.updatedAt && newer(item.updatedAt,patch.changes.updatedAt)) { skipped++; continue; }
     Object.assign(item, patch.changes); changed++;
   }
   const additions = update.items.filter(i => !next.items.some(old => old.id === i.id));
@@ -53,11 +57,13 @@ export function mergeUpdate(current: Data, input: unknown) {
   return { data: validateData(next), title: update.title, alreadyApplied: false, added: additions.length, changed, skipped };
 }
 
-const batchSchema=z.object({format:z.literal('research-update-batch-v1'),title:z.string().min(1).max(200),updates:z.array(updateSchema).min(1).max(30)}).strict();
+const batchSchema=z.object({format:z.literal('research-update-batch-v1'),title:z.string().min(1).max(200),structureVersion:z.literal(2).optional(),archiveExperiments:z.boolean().optional(),archivedItems:z.array(itemSchema).max(2000).optional(),updates:z.array(updateSchema).min(1).max(30)}).strict();
 export function mergeUpdates(current:Data,input:unknown){
  const batch=batchSchema.parse(input);
  if(new Set(batch.updates.map(u=>u.projectId)).size!==batch.updates.length)throw Error('批量更新中项目重复。');
  let data=current,added=0,changed=0,skipped=0,alreadyApplied=true;
  for(const update of batch.updates){const r=mergeUpdate(data,update);data=r.data;added+=r.added;changed+=r.changed;skipped+=r.skipped;alreadyApplied=alreadyApplied&&r.alreadyApplied;}
+ if(batch.archivedItems&&!alreadyApplied){data=structuredClone(data);data.archivedItems=data.archivedItems||[];for(const i of batch.archivedItems)if(!data.archivedItems.some(a=>a.id===i.id))data.archivedItems.push(i);const archived=new Map(batch.archivedItems.map(i=>[i.id,i]));data.items=data.items.filter(i=>!archived.has(i.id)||newer(i.updatedAt,archived.get(i.id)!.updatedAt));}
+ if(batch.archiveExperiments&&!alreadyApplied)data=organizeWorkspace(data,true).data;
  return {data,title:batch.title,added,changed,skipped,alreadyApplied};
 }

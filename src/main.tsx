@@ -5,6 +5,7 @@ import Workbench from './Workbench';
 import ChangePassphraseDialog from './ChangePassphraseDialog';
 import {Data} from './lib/model';
 import {Envelope, Snapshot, STORAGE_KEY, openEnvelope, seal, parseEnvelope, deriveKey, salt, ITERATIONS, rekeyEnvelope} from './lib/vault';
+import {organizeWorkspace} from './lib/structure';
 import {emptyWorkspace} from './lib/template';
 import './style.css';
 
@@ -30,7 +31,9 @@ function App() {
         const key=await deriveKey(password,template.salt);
         envelope=await seal({schemaVersion:1,data:emptyWorkspace(),revision:0,updatedAt:new Date().toISOString()},key,template);
       }
-      const opened = await openEnvelope(envelope,password);
+      let opened = await openEnvelope(envelope,password);
+      const organized=organizeWorkspace(opened.snapshot.data);
+      if(organized.changed){const snapshot={...opened.snapshot,data:organized.data,revision:opened.snapshot.revision+1,updatedAt:new Date().toISOString()};envelope=await seal(snapshot,opened.key,envelope);opened={...opened,snapshot,envelope};}
       if(restore && raw && !confirm('用选中的备份替换本机记录？请先确认已有最新备份。')) return;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(envelope));
       setHasLocal(true); setSession({...opened, raw:JSON.stringify(envelope)}); setPassword(''); setRestore(null);
